@@ -65,6 +65,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   button:disabled{background:#3a4048; color:#7c848f; cursor:not-allowed;}
   button.secondary{background:var(--panel-2); color:var(--text); border:1px solid var(--border);}
   button.secondary:hover{background:#242a33;}
+  button.danger{background:transparent; color:var(--err); border:1px solid rgba(224,85,74,.4);}
+  button.danger:hover{background:rgba(224,85,74,.12);}
   .folder-chip{
     display:flex; align-items:center; gap:8px; background:var(--panel-2);
     border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:13px;
@@ -82,18 +84,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
   th{color:var(--muted); font-weight:600; position:sticky; top:0; background:var(--panel);}
   tr.flag td{background:rgba(224,166,62,.08);}
+  tr.hidden-row{display:none;}
   .badge{
     display:inline-block; padding:2px 7px; border-radius:20px; font-size:11px; font-weight:600;
   }
   .badge.ok{background:rgba(62,207,142,.15); color:var(--ok);}
   .badge.warn{background:rgba(224,166,62,.15); color:var(--warn);}
+  .badge.manual{background:rgba(91,156,246,.15); color:var(--accent); margin-left:6px;}
   .table-wrap{max-height:420px; overflow:auto; border:1px solid var(--border); border-radius:8px;}
   .notice{
     background:rgba(224,166,62,.1); border:1px solid rgba(224,166,62,.35); color:#f0c266;
     border-radius:8px; padding:10px 14px; font-size:13px; margin-bottom:14px;
   }
   .notice.err{background:rgba(224,85,74,.1); border-color:rgba(224,85,74,.35); color:#f0958c;}
-  .footer-actions{display:flex; gap:10px; align-items:center; margin-top:16px;}
+  .footer-actions{display:flex; gap:10px; align-items:center; margin-top:16px; flex-wrap:wrap;}
   .hint{font-size:12.5px; color:var(--muted); margin-top:4px;}
   code{background:var(--panel-2); padding:1px 6px; border-radius:5px; font-size:12px;}
   .step-num{
@@ -102,6 +106,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     margin-right:8px;
   }
   a.link{color:var(--accent);}
+  .cert-select{
+    background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    padding:4px 6px; border-radius:6px; font-size:12px; max-width:190px;
+  }
+  .filter-row{display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:12px;}
+  .filter-row input[type=text]{min-width:220px;}
+  .filter-row label.check{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--muted); flex-direction:row;}
 </style>
 </head>
 <body>
@@ -130,7 +141,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         <input type="text" id="baseUrl" value="https://dnadc.s3.ap-southeast-2.amazonaws.com/GS/">
       </div>
     </div>
-    <p class="hint">Gemstone items live under <code>.../GS/&lt;item&gt;/...</code>. Natural items live directly under <code>.../&lt;item&gt;/...</code>. Switching the dropdown updates the URL below — edit it directly if your bucket layout ever changes.</p>
+    <p class="hint">Gemstone items live under <code>.../GS/&lt;item&gt;/...</code>. Natural items live directly under <code>.../&lt;item&gt;/...</code>. Switching the dropdown updates the URL below — edit it directly if your bucket layout ever changes. Your last-used choice here is remembered for next time.</p>
   </div>
 
   <div class="card">
@@ -138,9 +149,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     <div class="row">
       <button id="pickFolder">+ Add a folder</button>
       <button id="scanBtn" class="secondary" disabled>Scan selected folder(s)</button>
+      <button id="clearBtn" class="danger">Clear / start over</button>
     </div>
     <div class="folders-list" id="foldersList"></div>
-    <p class="hint">Add one or more root folders. Each can be a "batch" folder containing item sub-folders (like <code>NZ 1</code>, <code>NZ3</code>), or a flat folder of items directly — it's auto-detected either way.</p>
+    <p class="hint">Add one or more root folders. Each can be a "batch" folder containing item sub-folders (like <code>NZ 1</code>, <code>NZ3</code>), or a flat folder of items directly — it's auto-detected either way. Use <b>Clear / start over</b> to reset everything and scan a different file/folder set — no page refresh needed.</p>
   </div>
 
   <div class="card" id="resultsCard" style="display:none;">
@@ -150,8 +162,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       <div class="stat"><b id="statTotal">0</b>items found</div>
       <div class="stat"><b id="statFlagged">0</b>flagged for review</div>
       <div class="stat"><b id="statBatches">0</b>batch folder(s)</div>
+      <div class="stat"><b id="statCerts">0</b>certificate detected</div>
     </div>
     <br>
+    <div class="filter-row">
+      <input type="text" id="searchBox" placeholder="Filter by item #…">
+      <label class="check"><input type="checkbox" id="flaggedOnly"> Show flagged only</label>
+      <span class="hint" id="filterCount"></span>
+    </div>
     <div class="table-wrap">
       <table>
         <thead>
@@ -165,16 +183,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     </div>
     <div class="footer-actions">
       <button id="downloadBtn">Download bulk_upload.xlsx</button>
+      <button id="rescanBtn" class="secondary">Rescan same folders</button>
       <span class="hint" id="downloadHint"></span>
     </div>
   </div>
 </div>
-
 <script>
 const IMAGE_EXTS = new Set(['jpg','jpeg','png','gif','bmp','tiff','tif','webp','heic','heif']);
 const VIDEO_EXTS = new Set(['mp4','mov','avi','mkv','wmv','m4v','3gp','webm']);
 const DOC_EXTS = new Set(['pdf','doc','docx']);
 const MAX_DEPTH = 4;
+
+// Keywords that show up in real certificate/report filenames across labs.
+const CERT_KEYWORDS = ['cert','certificate','report','grs','igi','gia','hrd','gsi','ags','egl','sgl','lab'];
 
 const CATEGORY_URLS = {
   gemstone: 'https://dnadc.s3.ap-southeast-2.amazonaws.com/GS/',
@@ -184,12 +205,33 @@ const CATEGORY_URLS = {
 var pickedFolders = []; // { handle, name }
 var scannedRows = [];   // computed rows ready for export
 var scanWarnings = [];
+var lastBatchCount = 0;
 
 const categorySel = document.getElementById('category');
 const baseUrlInput = document.getElementById('baseUrl');
+
+// --- Remember last-used category/base URL (this is a standalone local
+// tool you open directly in your browser, not hosted inside Claude, so
+// using localStorage here is fine and just saves you re-typing). ---
+try {
+  const savedCat = localStorage.getItem('gbu_category');
+  const savedUrl = localStorage.getItem('gbu_baseUrl');
+  if (savedCat && CATEGORY_URLS[savedCat]) categorySel.value = savedCat;
+  if (savedUrl) baseUrlInput.value = savedUrl;
+} catch (e) { /* localStorage unavailable (e.g. file:// in some browsers) - ignore */ }
+
 categorySel.addEventListener('change', () => {
   baseUrlInput.value = CATEGORY_URLS[categorySel.value];
+  persistSettings();
 });
+baseUrlInput.addEventListener('change', persistSettings);
+
+function persistSettings() {
+  try {
+    localStorage.setItem('gbu_category', categorySel.value);
+    localStorage.setItem('gbu_baseUrl', baseUrlInput.value);
+  } catch (e) { /* ignore */ }
+}
 
 if (!window.showDirectoryPicker) {
   document.getElementById('unsupported').style.display = 'block';
@@ -222,6 +264,30 @@ function renderFolders() {
     el.appendChild(chip);
   });
 }
+
+// --- Clear / start over: resets everything in-page, no reload needed. ---
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if (scannedRows.length > 0) {
+    const ok = confirm('Clear the picked folder(s) and the current scan results? This can\'t be undone (nothing has been downloaded yet, so nothing on disk is affected).');
+    if (!ok) return;
+  }
+  pickedFolders = [];
+  scannedRows = [];
+  scanWarnings = [];
+  lastBatchCount = 0;
+  renderFolders();
+  document.getElementById('scanBtn').disabled = true;
+  document.getElementById('resultsCard').style.display = 'none';
+  document.getElementById('resultsBody').innerHTML = '';
+  document.getElementById('scanNotice').innerHTML = '';
+  document.getElementById('searchBox').value = '';
+  document.getElementById('flaggedOnly').checked = false;
+  document.getElementById('downloadHint').textContent = '';
+});
+
+document.getElementById('rescanBtn').addEventListener('click', () => {
+  document.getElementById('scanBtn').click();
+});
 
 function extOf(name) {
   const i = name.lastIndexOf('.');
@@ -289,6 +355,32 @@ async function findBatches(rootHandle) {
   return { batches, warnings };
 }
 
+// Higher score = more likely this "extra" (non-image/video) file is the
+// certificate/report, rather than just another photo dropped in the
+// folder. A real cert document (pdf/doc/docx) scores highest; a filename
+// carrying a lab/cert keyword scores next; a long digit-only basename
+// (typical lab report number) scores a little. Ties, and the
+// nothing-stands-out case, keep the first extra file (original
+// alphabetical order) — same as before this feature existed.
+function certScore(f) {
+  let score = 0;
+  if (DOC_EXTS.has(f.ext)) score += 100;
+  const baseLower = f.base.toLowerCase();
+  if (CERT_KEYWORDS.some(k => baseLower.includes(k))) score += 50;
+  if (/^\d{5,}$/.test(f.base)) score += 10;
+  return score;
+}
+
+function pickCertIndex(extra) {
+  if (extra.length === 0) return -1;
+  let bestIdx = 0, bestScore = certScore(extra[0]);
+  for (let i = 1; i < extra.length; i++) {
+    const s = certScore(extra[i]);
+    if (s > bestScore) { bestScore = s; bestIdx = i; }
+  }
+  return bestIdx;
+}
+
 function classifyItem(itemName, files) {
   let ownImage = null, ownVideo = null;
   const extra = [];
@@ -312,9 +404,11 @@ function classifyItem(itemName, files) {
     return !(IMAGE_EXTS.has(ext) || VIDEO_EXTS.has(ext) || DOC_EXTS.has(ext));
   });
   if (unrecognised.length) warnings.push(`unrecognised file type(s): ${unrecognised.join(', ')}`);
-  if (extra.length > 5) warnings.push(`${extra.length} extra files found, only first 5 used`);
+  if (extra.length > 5) warnings.push(`${extra.length} extra files found, only 1 cert + 4 more (Media5-8) are exported`);
 
-  return { item: itemName, ownImage, ownVideo, extra, warnings };
+  const certIdx = pickCertIndex(extra);
+
+  return { item: itemName, ownImage, ownVideo, extra, warnings, certIdx, certAuto: true };
 }
 
 document.getElementById('scanBtn').addEventListener('click', async () => {
@@ -344,10 +438,41 @@ document.getElementById('scanBtn').addEventListener('click', async () => {
     alert('Something went wrong while scanning: ' + e.message);
   }
 
+  lastBatchCount = batchCount;
   renderResults(batchCount);
   btn.disabled = false;
   btn.textContent = 'Scan selected folder(s)';
 });
+
+function certCellHtml(row, rowIndex) {
+  if (row.extra.length === 0) return '—';
+  const options = row.extra.map((e, i) =>
+    `<option value="${i}" ${i === row.certIdx ? 'selected' : ''}>${e.base}.${e.ext}</option>`
+  ).join('');
+  const manualBadge = row.certAuto ? '' : '<span class="badge manual">manual</span>';
+  return `<select class="cert-select" data-row="${rowIndex}">${options}</select>${manualBadge}`;
+}
+
+function applyFilters() {
+  const q = document.getElementById('searchBox').value.trim().toLowerCase();
+  const flaggedOnly = document.getElementById('flaggedOnly').checked;
+  const rows = document.querySelectorAll('#resultsBody tr');
+  let shown = 0;
+  rows.forEach(tr => {
+    const item = (tr.getAttribute('data-item') || '').toLowerCase();
+    const isFlag = tr.classList.contains('flag');
+    const matchesQ = !q || item.includes(q);
+    const matchesFlag = !flaggedOnly || isFlag;
+    const visible = matchesQ && matchesFlag;
+    tr.classList.toggle('hidden-row', !visible);
+    if (visible) shown++;
+  });
+  document.getElementById('filterCount').textContent =
+    (q || flaggedOnly) ? `Showing ${shown} of ${scannedRows.length}` : '';
+}
+
+document.getElementById('searchBox').addEventListener('input', applyFilters);
+document.getElementById('flaggedOnly').addEventListener('change', applyFilters);
 
 function renderResults(batchCount) {
   document.getElementById('resultsCard').style.display = 'block';
@@ -355,27 +480,41 @@ function renderResults(batchCount) {
   body.innerHTML = '';
 
   let flagged = 0;
-  for (const r of scannedRows) {
+  let certsFound = 0;
+  scannedRows.forEach((r, idx) => {
+    if (r.certIdx !== -1) certsFound++;
     const tr = document.createElement('tr');
+    tr.setAttribute('data-item', r.item);
     const hasWarn = r.warnings.length > 0;
     if (hasWarn) { tr.className = 'flag'; flagged++; }
     const extraStr = r.extra.map(e => `${e.base}.${e.ext}`).join(', ') || '—';
-    const certStr = r.extra[0] ? `${r.extra[0].base}.${r.extra[0].ext}` : '—';
     tr.innerHTML = `
       <td>${r.batch}</td>
       <td>${r.item}</td>
       <td>${r.ownImage ? r.ownImage.base + '.' + r.ownImage.ext : '—'}</td>
       <td>${r.ownVideo ? r.ownVideo.base + '.' + r.ownVideo.ext : '—'}</td>
-      <td>${certStr}</td>
+      <td>${certCellHtml(r, idx)}</td>
       <td>${extraStr}</td>
       <td>${hasWarn ? `<span class="badge warn">${r.warnings.join('; ')}</span>` : '<span class="badge ok">ok</span>'}</td>
     `;
     body.appendChild(tr);
-  }
+  });
+
+  // Wire up the per-row certificate override dropdowns.
+  body.querySelectorAll('select.cert-select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const rowIdx = Number(e.target.getAttribute('data-row'));
+      scannedRows[rowIdx].certIdx = Number(e.target.value);
+      scannedRows[rowIdx].certAuto = false;
+      renderResults(lastBatchCount); // re-render to refresh the "manual" badge + stats
+      applyFilters();
+    });
+  });
 
   document.getElementById('statTotal').textContent = scannedRows.length;
   document.getElementById('statFlagged').textContent = flagged;
   document.getElementById('statBatches').textContent = batchCount;
+  document.getElementById('statCerts').textContent = certsFound;
 
   const noticeEl = document.getElementById('scanNotice');
   noticeEl.innerHTML = '';
@@ -388,9 +527,10 @@ function renderResults(batchCount) {
   if (flagged > 0) {
     const div = document.createElement('div');
     div.className = 'notice';
-    div.innerHTML = `${flagged} item(s) are flagged above (missing image/video, extra unexplained files, or unrecognised file types). They'll still be included in the export — check the highlighted rows before you upload.`;
+    div.innerHTML = `${flagged} item(s) are flagged above (missing image/video, extra unexplained files, or unrecognised file types). They'll still be included in the export — check the highlighted rows before you upload. The "Report# / Cert" column is a dropdown for every item with extra files — pick a different one if the auto-detected certificate looks wrong.`;
     noticeEl.appendChild(div);
   }
+  applyFilters();
 }
 
 function buildFormula(baseUrl, itemRef, nameLiteralOrRef, ext, literal) {
@@ -399,6 +539,10 @@ function buildFormula(baseUrl, itemRef, nameLiteralOrRef, ext, literal) {
 }
 
 document.getElementById('downloadBtn').addEventListener('click', () => {
+  if (scannedRows.length === 0) {
+    alert('Nothing scanned yet — add folder(s) and click "Scan selected folder(s)" first.');
+    return;
+  }
   const baseUrl = baseUrlInput.value.endsWith('/') ? baseUrlInput.value : baseUrlInput.value + '/';
   const headers = ['Certificate','Image','Item #','Media4','Media5','Media6','Media7','Media8','Report#','Video'];
   const aoa = [headers];
@@ -418,13 +562,17 @@ document.getElementById('downloadBtn').addEventListener('click', () => {
       formulaCells.push({ r: rowNum, c: 4, f }); // D Media4
       formulaCells.push({ r: rowNum, c: 10, f }); // J Video
     }
-    if (row.extra[0]) {
-      const cert = row.extra[0];
+
+    const certIdx = row.certIdx;
+    const others = row.extra.filter((_, i) => i !== certIdx);
+
+    if (certIdx !== -1 && certIdx !== undefined && row.extra[certIdx]) {
+      const cert = row.extra[certIdx];
       rowArr[8] = cert.base; // I: Report#
       formulaCells.push({ r: rowNum, c: 1, f: buildFormula(baseUrl, itemRef, cert.base, cert.ext, true).slice(1) }); // A Certificate
     }
     const mediaCols = [5, 6, 7, 8]; // E,F,G,H -> Media5-8 (1-indexed cols)
-    row.extra.slice(1, 5).forEach((ex, i) => {
+    others.slice(0, 4).forEach((ex, i) => {
       formulaCells.push({ r: rowNum, c: mediaCols[i], f: buildFormula(baseUrl, itemRef, ex.base, ex.ext, true).slice(1) });
     });
 
